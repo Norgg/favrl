@@ -18,9 +18,9 @@ var empty_sprite = [
 ];
 
 var beast_sprite = [
-    0,0,9,
-    9,9,9,
-    9,0,9
+    0,0,7,
+    7,7,7,
+    7,0,7
 ];
 
 var door_sprite = [
@@ -58,10 +58,24 @@ Thing.prototype = {
         
         var move_result = this.test_move(this.x+xdir, this.y+ydir);
         if (move_result == "moved") {
-            this.remove();
+            this.level.remove(this);
             this.x += xdir;
             this.y += ydir;
-            this.add();
+            this.level.add(this);
+            return true;
+        } else if (move_result == "down") {
+            this.level.remove(this);
+            this.x += xdir;
+            this.y += ydir;
+            this.level = levels[this.level.depth+1];
+            this.level.add(this);
+            return true;
+        } else if (move_result == "up") {
+            this.level.remove(this);
+            this.x += xdir;
+            this.y += ydir;
+            this.level = levels[this.level.depth-1];
+            this.level.add(this);
             return true;
         } else if (move_result == "acted") {
             return true;
@@ -72,8 +86,8 @@ Thing.prototype = {
 
     test_move: function(x, y) {
         if (x >= 0 && x < 5 && y >= 0 && y < 5) {
-            for (var i in map[x][y]) {
-                var thing = map[x][y][i];
+            for (var i in this.level.map[x][y]) {
+                var thing = this.level.map[x][y][i];
                 if (thing.wall) {
                     return "blocked";
                 } else if (this.player && thing.enemy) {
@@ -84,6 +98,10 @@ Thing.prototype = {
                     return "acted";
                 } else if (this.enemy && thing.enemy) {
                     return "blocked";
+                } else if (this.player && thing == this.level.stair_down) {
+                    return "down";
+                } else if (this.player && thing == this.level.stair_up) {
+                    return "up";
                 }
             }
             return "moved";
@@ -96,24 +114,71 @@ Thing.prototype = {
         this.hp--;
         if (this.hp == 0) {
             this.dead = true;
-            this.remove();
+            this.level.remove(this);
         }
     },
+}
 
-    remove: function() {
-        map[this.x][this.y].splice(map[this.x][this.y].indexOf(this), 1);
+Level = function(depth) {
+    this.depth = depth;
+    this.map = [
+        [[],[],[],[],[]],
+        [[],[],[],[],[]],
+        [[],[],[],[],[]],
+        [[],[],[],[],[]],
+        [[],[],[],[],[]]
+    ];
+
+    if (depth > 0) {
+        this.stair_up = new Thing(levels[depth-1].stair_down.x, levels[depth-1].stair_down.y, stair_up_sprite);
+        this.add(this.stair_up);
+    }
+    
+    if (depth < numlevels - 1) {
+        while (!this.stair_down) {
+            var x = Math.floor(Math.random()*5);
+            var y = Math.floor(Math.random()*5);
+            if (this.map[x][y].indexOf(this.stair_up) < 0) {
+                this.stair_down = new Thing(x, y, stair_down_sprite);
+            }
+        }
+        this.add(this.stair_down);
+    }
+
+    if (depth == 0) {
+        this.add(player);
+    }
+
+    for (var i = 0; i < depth+1; i++) {
+        var x = Math.floor(Math.random()*5);
+        var y = Math.floor(Math.random()*5);
+        this.add(this.beast(x, y));
+    }
+}
+
+Level.prototype = {
+    wall: function(x, y) {
+        var wall = new Thing(x, y, wall_sprite);
+        wall.wall = true;
+        return wall;
     },
 
-    add: function() {
-        map[this.x][this.y].push(this);
+    beast: function(x, y) {
+        var beast = new Thing(3, 2, beast_sprite);
+        beast.enemy = true;
+        return beast;
+    },
+
+    add: function(thing) {
+        this.map[thing.x][thing.y].push(thing);
+        thing.level = this;
+    },
+    
+    remove: function(thing) {
+        this.map[thing.x][thing.y].splice(this.map[thing.x][thing.y].indexOf(thing), 1);
     },
 }
 
-function wall(x, y) {
-    var wall = new Thing(x, y, wall_sprite);
-    wall.wall = true;
-    return wall;
-}
 
 /**** Setup ****/
 var canvas = document.createElement('canvas');
@@ -130,24 +195,11 @@ var player = new Thing(0, 0, human_sprite);
 player.player = true;
 player.hp = 10;
 player.mp = 10;
-var stair_down = new Thing(2, 2, stair_down_sprite);
-var beast = new Thing(3, 2, beast_sprite);
-beast.enemy = true;
-var things = [
-    player, stair_down, beast, wall(1, 0), wall(1, 1), wall(1, 2), wall(1, 3), wall(2, 3), wall(3, 3), wall(3, 1)
-];
 
-var map = [
-    [[],[],[],[],[]],
-    [[],[],[],[],[]],
-    [[],[],[],[],[]],
-    [[],[],[],[],[]],
-    [[],[],[],[],[]]
-]
-
-for (var i in things) {
-    var t = things[i];
-    map[t.x][t.y].push(t);
+var numlevels = 10;
+var levels = [];
+for (var i = 0; i < numlevels; i++) {
+    levels.push(new Level(i));
 }
 
 /**** Rendering ****/
@@ -181,12 +233,12 @@ function render() {
     canvas.width = canvas.width;
     bmp = ctx.getImageData(0, 0, canvas.width, canvas.height);
 
-    for (var i in map) {
-        for (var j in map[i]) {
-            if (map[i][j].length == 0) {
+    for (var i in player.level.map) {
+        for (var j in player.level.map[i]) {
+            if (player.level.map[i][j].length == 0) {
                 draw_sprite(empty_sprite, i, j);
             } else {
-                draw_sprite(map[i][j][map[i][j].length-1].sprite, i, j);
+                draw_sprite(player.level.map[i][j][player.level.map[i][j].length-1].sprite, i, j);
             }
         }
     }
@@ -214,7 +266,20 @@ $(window).keydown(function(evt) {
         moved = false;
     }
     if (moved) {
-        beast.move(Math.floor((Math.random() - 1/3.0) * 3), Math.floor((Math.random() - 1/3.0) * 3));
+        for (var i in player.level.map) {
+            for (var j in player.level.map[i]) {
+                for (var t in player.level.map[i][j]) {
+                    var thing = player.level.map[i][j][t];
+                    if (thing.enemy) {
+                        if (Math.random() > 0.5) {
+                            thing.move(Math.floor((Math.random() - 1/3.0) * 3), 0);
+                        } else {
+                            thing.move(0, Math.floor((Math.random() - 1/3.0) * 3));
+                        }
+                    }
+                }
+            }
+        }
     }
     render();
 });
