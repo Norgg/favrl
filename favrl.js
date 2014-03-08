@@ -11,12 +11,6 @@ var wall_sprite = [
     5,5,5
 ];
 
-var empty_sprite = [
-    0,0,0,
-    0,0,0,
-    0,0,0
-];
-
 var beast_sprite = [
     0,0,7,
     7,7,7,
@@ -30,15 +24,15 @@ var door_sprite = [
 ];
 
 var stair_up_sprite = [
-    0,0,9,
-    0,9,9,
-    9,9,0
+    0,0,5,
+    0,7,6,
+    9,8,0
 ];
 
 var stair_down_sprite = [
     9,0,0,
-    9,9,0,
-    0,9,9
+    8,7,0,
+    0,6,5
 ];
 
 /**** Thing class ****/
@@ -181,15 +175,18 @@ Level.prototype = {
 
 
 /**** Setup ****/
+var small_canvas = document.createElement('canvas');
+small_canvas.width = small_canvas.height = 16;
+
+var small_ctx = small_canvas.getContext("2d");
+
 var canvas = document.createElement('canvas');
-canvas.width = canvas.height = 16;
-$(function() {
-    //document.body.appendChild(canvas);
-    render();
-});
+canvas.width = canvas.height = 128;
 
 var ctx = canvas.getContext("2d");
-var bmp = ctx.getImageData(0, 0, canvas.width, canvas.height);
+ctx.scale(canvas.width/small_canvas.width, canvas.height/small_canvas.height);
+
+var bmp = null
 
 var player = new Thing(0, 0, human_sprite);
 player.player = true;
@@ -206,7 +203,7 @@ for (var i = 0; i < numlevels; i++) {
 function draw_sprite(sprite, x, y) {
     for (var i = 0; i < 3; i++) {
         for (var j = 0; j < 3; j++) {
-            var idx = ((x*3+i) + (y*3+j) * canvas.width) * 4;
+            var idx = ((x*3+i) + (y*3+j) * 16) * 4;
             bmp.data[idx] = bmp.data[idx+1] = bmp.data[idx+2] = sprite[i+j*3]*25;
             bmp.data[idx+3] = 255;
         }
@@ -215,29 +212,41 @@ function draw_sprite(sprite, x, y) {
 
 function draw_health() {
     for (var i = 0; i < player.hp; i++) {
-        var idx = (15 + i * canvas.width) * 4;
+        var idx = (15 + i * 16) * 4;
         bmp.data[idx] = 255;
         bmp.data[idx+1] = bmp.data[idx+2] = 0;
         bmp.data[idx+3] = 255;
     }
 
     for (var i = 0; i < player.mp; i++) {
-        var idx = (i + 15 * canvas.width) * 4;
+        var idx = (i + 15 * 16) * 4;
         bmp.data[idx] = bmp.data[idx+1] = 0;
         bmp.data[idx+2] = 255;
         bmp.data[idx+3] = 255;
     }
 }
 
+function clear_screen() {
+    for (var i = 0; i < 16; i++) {
+        for (var j = 0; j < 16; j++) {
+            var idx = (i + j * 16) * 4;
+            bmp.data[idx] = bmp.data[idx+1] = bmp.data[idx+2] = 0;
+            bmp.data[idx+3] = 255;
+        }
+    }
+}
+
 function render() {
-    canvas.width = canvas.width;
-    bmp = ctx.getImageData(0, 0, canvas.width, canvas.height);
+
+    small_ctx.webkitImageSmoothingEnabled = small_ctx.mozImageSmoothingEnabled = small_ctx.imageSmoothingEnabled = false;
+    ctx.webkitImageSmoothingEnabled = ctx.mozImageSmoothingEnabled = ctx.imageSmoothingEnabled = false;
+    bmp = small_ctx.createImageData(16, 16);
+
+    clear_screen();
 
     for (var i in player.level.map) {
         for (var j in player.level.map[i]) {
-            if (player.level.map[i][j].length == 0) {
-                draw_sprite(empty_sprite, i, j);
-            } else {
+            if (player.level.map[i][j].length > 0) {
                 draw_sprite(player.level.map[i][j][player.level.map[i][j].length-1].sprite, i, j);
             }
         }
@@ -245,10 +254,12 @@ function render() {
     
     draw_health();
 
-    ctx.putImageData(bmp, 0, 0);
+    small_ctx.putImageData(bmp, 0, 0);
+    
+    ctx.drawImage(small_canvas, 0, 0);   
 
     var fav = $('<link rel="shortcut icon" type="image/png">');
-    fav.attr('href', canvas.toDataURL('image/png'));
+    fav.attr('href', small_canvas.toDataURL('image/png'));
     $('head').append(fav);
 }
 
@@ -284,3 +295,13 @@ $(window).keydown(function(evt) {
     render();
 });
 
+$(function() {
+    $('#toosmall').click(function(evt) {
+        evt.preventDefault();
+        if (!$('canvas').length) {
+            $('#toosmall').after("<p>FINE.</p>");
+            $('body').append(canvas);
+        }
+    });
+    render();
+});
