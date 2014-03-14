@@ -69,7 +69,7 @@ function Thing(x, y, sprite) {
     this.wall = false;
     this.player = false;
     this.enemy = false;
-    this.hp = 3;
+    this.hp = 1;
     this.maxhp = 3;
     this.maxmp = 16;
 }
@@ -120,10 +120,12 @@ Thing.prototype = {
                 this.level.remove(this);
                 this.level = levels[this.level.depth+1];
                 this.level.add(this);
+                return false; // Don't update next floor after switching.
             } else if (thing == this.level.stair_up) {
                 this.level.remove(this);
                 this.level = levels[this.level.depth-1];
                 this.level.add(this);
+                return false; // Don't update next floor after switching.
             }
         }
         return true;
@@ -197,6 +199,8 @@ Level = function(depth) {
     var maze_gen = new ROT.Map.EllerMaze(7, 7);
     maze_gen.create(this.make_wall.bind(this));
 
+    this.fov = new ROT.FOV.PreciseShadowcasting(this.transparent.bind(this));
+
     if (depth > 0) {
         var x = levels[depth-1].stair_down.x;
         var y = levels[depth-1].stair_down.y;
@@ -268,6 +272,22 @@ Level.prototype = {
     },
 
     update: function() {
+        var pathfind = new ROT.Path.AStar(player.x, player.y, this.passable.bind(this), {topology: 4});
+
+        if (player.level == this) {
+            this.fov.compute(player.x, player.y, 5, function(x, y, r, visibility) {
+                if (x >= 0 && y >= 0 && x < W && y < H) {
+                    //console.log(x, y);
+                    for (var t in this.map[x][y]) {
+                        var thing = this.map[x][y][t];
+                        if (thing.enemy) {
+                            thing.sees_player = true;
+                        }
+                    }
+                }
+            }.bind(this));
+        }
+
         this.free_cells = [];
         for (var i = 0; i < this.map.length; i++) {
             for (var j = 0; j < this.map.length; j++) {
@@ -277,20 +297,62 @@ Level.prototype = {
                 for (var t in this.map[i][j]) {
                     var thing = this.map[i][j][t];
                     if (thing.enemy) {
-                        if (Math.random() > 0.5) {
-                            thing.move(Math.floor((Math.random() - 1/3.0) * 3), 0);
+                        if (thing.sees_player) {
+                            var step = 0;
+                            //console.log("Pathing");
+                            pathfind.compute(thing.x, thing.y, function(x, y) {
+                                if (step == 1) {
+                                    console.log(x-thing.x, y-thing.y);
+                                    thing.move(x-thing.x, y-thing.y);
+                                    first = false;
+                                }
+                                step++;
+                            });
                         } else {
-                            thing.move(0, Math.floor((Math.random() - 1/3.0) * 3));
+                            if (ROT.RNG.getUniform() > 0.5) {
+                                thing.move(Math.floor((ROT.RNG.getUniform() - 1/3.0) * 3), 0);
+                            } else {
+                                thing.move(0, Math.floor((ROT.RNG.getUniform() - 1/3.0) * 3));
+                            }
                         }
+                        thing.sees_player = false;
                     }
                 }
             }
         }
     },
+
+    transparent: function(x, y) { // Whether light passes through this cell.
+        if (x >= 0 && y >= 0 && x < W && y < H) {
+            for (var t = 0; t < this.map[x][y].length; t++) {
+                var thing = this.map[x][y][t]
+                if (thing.wall || thing.enemy) {
+                    return false;
+                }
+            }
+            return true;
+        }
+        return false;
+    },
+
+    passable: function(x, y) { // Whether this cell can be traversed.
+        if (x >= 0 && y >= 0 && x < W && y < H) {
+            for (var t = 0; t < this.map[x][y].length; t++) {
+                var thing = this.map[x][y][t]
+                if (thing.wall) {
+                    return false;
+                }
+            }
+            return true;
+        }
+        return false;
+    },
 }
 
 /**** Setup ****/
 function setup() {
+    ROT.RNG.setSeed(1341);
+    
     window.W = 5;
     window.H = 5;
     window.small_canvas = document.createElement('canvas');
@@ -310,11 +372,12 @@ function setup() {
 
 
 function restart() {
+    ROT.RNG.setSeed(1341);
     window.player = new Thing(0, 0, human_sprite);
     player.player = true;
     player.hp = 5;
     player.maxhp = 5;
-    player.mp = 10;
+    player.mp = 3;
     player.maxmp = 16;
 
     window.numlevels = 10;
@@ -343,8 +406,6 @@ function draw_bigsprite(sprite) {
     for (var i = 0; i < 16; i++) {
         for (var j = 0; j < 16; j++) {
             var idx = (i + j*16) * 4;
-            console.log(i+j*16);
-            //console.log(sprite[i+j*W]);
             bmp.data[idx] = bmp.data[idx+1] = bmp.data[idx+2] = sprite[i+j*16]*25;
             bmp.data[idx+3] = 255;
         }
@@ -390,8 +451,8 @@ function render() {
         for (var i = 0; i < W; i++) {
             for (var j = 0; j < H; j++) {
                 draw_sprite(floor_sprite, i, j);
-                if (player.level.map[i][j].length > 0) {
-                    var thing = player.level.map[i][j][player.level.map[i][j].length-1];
+                for (var t = 0; t < player.level.map[i][j].length; t++) {
+                    var thing = player.level.map[i][j][t];
                     draw_sprite(thing.sprite, i, j);
                 }
             }
@@ -417,7 +478,7 @@ $(window).keydown(function(evt) {
     } else if (evt.keyCode == 83 || evt.keyCode == 74 || evt.keyCode == 40) { // S|J|Down
         moved = player.move(0, 1);
     } else if (evt.keyCode == 65 || evt.keyCode == 72 || evt.keyCode == 37) { // A|H|Left
-        movded = player.move(-1, 0);
+        moved = player.move(-1, 0);
     } else if (evt.keyCode == 68 || evt.keyCode == 76 || evt.keyCode == 39) { // D|L|Right
         moved = player.move(1, 0);
     } else if (evt.keyCode == 82) { // R
@@ -428,10 +489,11 @@ $(window).keydown(function(evt) {
     } else if (evt.keyCode == 77) { // M
         moved = player.magic();
     } else {
-        console.log(evt.keyCode);
+        //console.log(evt.keyCode);
     }
      
     if (moved) {
+        console.log("Updating");
         player.level.update();
     }
     render();
