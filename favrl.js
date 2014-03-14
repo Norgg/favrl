@@ -23,10 +23,16 @@ var beast_sprite = [
     7,$,7
 ];
 
-var door_sprite = [
-    $,9,$,
-    9,0,9,
-    9,0,9
+var treasure_sprite = [
+    8,9,8,
+    8,0,8,
+    8,8,8
+];
+
+var portal_sprite = [
+    $,7,$,
+    7,9,7,
+    7,9,7
 ];
 
 var stair_up_sprite = [
@@ -60,8 +66,27 @@ var skull_sprite = [
     0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
 ];
 
-/**** Thing class ****/
+var win_sprite = [
+    0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+    0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+    0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+    0,0,8,9,8,0,0,0,0,0,0,0,0,0,0,0,
+    0,0,8,0,8,0,5,5,5,0,0,0,0,0,0,0,
+    0,0,8,8,8,0,5,5,5,0,0,9,0,0,0,0,
+    0,0,0,9,0,0,5,5,5,0,0,9,0,0,0,0,
+    0,0,0,9,9,9,9,9,9,9,9,9,0,0,0,0,
+    0,0,0,0,0,0,9,9,9,0,0,0,0,0,0,0,
+    0,0,0,0,0,0,9,9,9,0,0,0,0,0,0,0,
+    0,0,0,0,0,0,9,9,9,0,0,0,0,0,0,0,
+    0,0,0,0,0,0,9,0,9,0,0,0,0,0,0,0,
+    0,0,0,0,0,9,9,0,9,9,0,0,0,0,0,0,
+    0,0,6,6,6,6,6,6,6,6,6,6,6,6,0,0,
+    0,5,5,5,5,5,5,5,5,5,5,5,5,5,5,0,
+    4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4
+];
 
+
+/**** Thing class ****/
 function Thing(x, y, sprite) {
     this.x = x;
     this.y = y;
@@ -72,6 +97,7 @@ function Thing(x, y, sprite) {
     this.hp = 1;
     this.maxhp = 3;
     this.maxmp = 16;
+    this.inventory = [];
 }
 Thing.prototype = {
     move: function(xdir, ydir) {
@@ -92,7 +118,7 @@ Thing.prototype = {
 
     test_move: function(x, y) {
         if (x >= 0 && x < W && y >= 0 && y < H) {
-            for (var i = this.level.map[x][y].length-1; i >= 0; i--) {
+            for (var i = this.level.map[x][y].length-1; i >= 0; i--) { // Check for blocking/acting items
                 var thing = this.level.map[x][y][i];
                 if (thing.wall) {
                     return "blocked";
@@ -106,6 +132,7 @@ Thing.prototype = {
                     return "blocked";
                 }
             }
+            
             return "moved";
         } else {
             return "blocked";
@@ -126,6 +153,18 @@ Thing.prototype = {
                 this.level = levels[this.level.depth-1];
                 this.level.add(this);
                 return false; // Don't update next floor after switching.
+            } else if (thing.pickup) {
+                this.inventory.push(thing);
+                this.level.remove(thing);
+            } else if (thing.portal) {
+                for (var inv = 0; inv < this.inventory.length; inv++) {
+                    var inv_thing = this.inventory[inv];
+                    if (inv_thing.treasure) {
+                        player.won = true;
+                        return false; // Game finished, don't need to update stuff.
+                    }
+                }
+                this.random_teleport();
             }
         }
         return true;
@@ -158,11 +197,7 @@ Thing.prototype = {
             }
 
             if (this.mp >= 3) {
-                var cell = this.level.free_cells.random();
-                this.level.remove(this);
-                this.x = cell[0];
-                this.y = cell[1];
-                this.level.add(this);
+                this.random_teleport();
             }
 
             this.mp = 0;
@@ -170,6 +205,14 @@ Thing.prototype = {
         } else {
             return false;
         }
+    },
+
+    random_teleport: function() {
+        var cell = this.level.free_cells.random();
+        this.level.remove(this);
+        this.x = cell[0];
+        this.y = cell[1];
+        this.level.add(this);
     },
 
     damage: function(by) {
@@ -211,19 +254,23 @@ Level = function(depth) {
         this.map[x][y].length = 0; // Make sure this cell is free of walls.
         this.stair_up = new Thing(x, y, stair_up_sprite);
         this.add(this.stair_up);
+    } else { // First level.
+        var cell = this.free_cells.random();
+        this.portal = new Thing(cell[0], cell[1], portal_sprite);
+        this.portal.portal = true;
+        this.add(this.portal);
+        this.free_cells.splice(this.free_cells.indexOf(cell), 1);
     }
     
     if (depth < numlevels - 1) {
-        while (!this.stair_down) {
-            var cell = this.free_cells.random();
-            var x = cell[0];
-            var y = cell[1];
-            if (this.map[x][y].indexOf(this.stair_up) < 0) {
-                this.stair_down = new Thing(x, y, stair_down_sprite);
-                this.free_cells.splice(this.free_cells.indexOf(cell), 1);
-            }
-        }
+        var cell = this.free_cells.random();
+        this.stair_down = new Thing(cell[0], cell[1], stair_down_sprite);
+        this.free_cells.splice(this.free_cells.indexOf(cell), 1);
         this.add(this.stair_down);
+    } else { // Last level.
+        var cell = this.free_cells.random();
+        this.add(this.treasure(cell[0], cell[1]));
+        this.free_cells.splice(this.free_cells.indexOf(cell), 1);
     }
 
     if (depth == 0) {
@@ -236,10 +283,10 @@ Level = function(depth) {
 
     for (var i = 0; i < depth+1; i++) {
         var cell = this.free_cells.random();
-        var x = cell[0];
-        var y = cell[1];
-        this.add(this.beast(x, y));
-        this.free_cells.splice(this.free_cells.indexOf(cell), 1);
+        if (cell) {
+            this.add(this.beast(cell[0], cell[1]));
+            this.free_cells.splice(this.free_cells.indexOf(cell), 1);
+        }
     }
 }
 
@@ -260,6 +307,13 @@ Level.prototype = {
         var beast = new Thing(x, y, beast_sprite);
         beast.enemy = true;
         return beast;
+    },
+
+    treasure: function(x, y) {
+        var treasure = new Thing(x, y, treasure_sprite);
+        treasure.pickup = true;
+        treasure.treasure = true;
+        return treasure;
     },
 
     add: function(thing) {
@@ -363,7 +417,7 @@ Level.prototype = {
 
 /**** Setup ****/
 function setup() {
-    ROT.RNG.setSeed(1341);
+    //ROT.RNG.setSeed(1341);
     
     window.W = 5;
     window.H = 5;
@@ -382,9 +436,7 @@ function setup() {
     restart();
 }
 
-
 function restart() {
-    ROT.RNG.setSeed(1341);
     window.player = new Thing(0, 0, human_sprite);
     player.player = true;
     player.hp = 5;
@@ -458,7 +510,9 @@ function render() {
 
     clear_screen();
 
-    if (player.dead) {
+    if (player.won) {
+        draw_bigsprite(win_sprite);
+    } else if (player.dead) {
         draw_bigsprite(skull_sprite);
     } else {
         for (var i = 0; i < W; i++) {
@@ -485,6 +539,13 @@ function render() {
 
 $(window).keydown(function(evt) {
     //evt.preventDefault();
+    
+    if (evt.keyCode == 82) { // R
+        restart();
+        return;
+    }
+    if (player.dead || player.won) return;
+
     var moved = false;
     if (evt.keyCode == 87 || evt.keyCode == 75 || evt.keyCode == 38) { // W|K|Up
         moved = player.move(0, -1);
@@ -494,9 +555,6 @@ $(window).keydown(function(evt) {
         moved = player.move(-1, 0);
     } else if (evt.keyCode == 68 || evt.keyCode == 76 || evt.keyCode == 39) { // D|L|Right
         moved = player.move(1, 0);
-    } else if (evt.keyCode == 82) { // R
-        restart();
-        return;
     } else if (evt.keyCode == 32) { // Space
         moved = player.act();
     } else if (evt.keyCode == 77) { // M
@@ -507,7 +565,9 @@ $(window).keydown(function(evt) {
      
     if (moved) {
         tick++;
-        //console.log("Move " + tick);
+        //for (var i = 0; i < levels.length; i++) {
+        //    levels[i].update();
+        //}
         player.level.update();
     }
     //console.log("Rendering");
