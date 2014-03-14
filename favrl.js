@@ -272,6 +272,7 @@ Level.prototype = {
     },
 
     update: function() {
+        //console.log("Updating.");
         var pathfind = new ROT.Path.AStar(player.x, player.y, this.passable.bind(this), {topology: 4});
 
         if (player.level == this) {
@@ -289,6 +290,17 @@ Level.prototype = {
         }
 
         this.free_cells = [];
+
+        // Reset moved state of all enemies.
+        for (var i = 0; i < this.map.length; i++) {
+            for (var j = 0; j < this.map.length; j++) {
+                for (var t in this.map[i][j]) {
+                    var thing = this.map[i][j][t];
+                    if (thing.enemy) thing.moved = false;
+                }
+            }
+        }
+
         for (var i = 0; i < this.map.length; i++) {
             for (var j = 0; j < this.map.length; j++) {
                 if (this.map[i][j].length == 0) {
@@ -297,14 +309,14 @@ Level.prototype = {
                 for (var t in this.map[i][j]) {
                     var thing = this.map[i][j][t];
                     if (thing.enemy) {
+                        if (thing.moved) continue; // Make sure we don't double-process an enemy.
+                        thing.moved = true;
                         if (thing.sees_player) {
                             var step = 0;
                             //console.log("Pathing");
                             pathfind.compute(thing.x, thing.y, function(x, y) {
                                 if (step == 1) {
-                                    console.log(x-thing.x, y-thing.y);
                                     thing.move(x-thing.x, y-thing.y);
-                                    first = false;
                                 }
                                 step++;
                             });
@@ -379,6 +391,7 @@ function restart() {
     player.maxhp = 5;
     player.mp = 3;
     player.maxmp = 16;
+    window.tick = 0;
 
     window.numlevels = 10;
     window.levels = [];
@@ -493,9 +506,11 @@ $(window).keydown(function(evt) {
     }
      
     if (moved) {
-        console.log("Updating");
+        tick++;
+        //console.log("Move " + tick);
         player.level.update();
     }
+    //console.log("Rendering");
     render();
 });
 
