@@ -1,6 +1,6 @@
 /**** Sprites ****/
 var human_sprite = [
-    9,9,9,
+    9,5,9,
     0,9,0,
     9,0,9
 ];
@@ -12,7 +12,7 @@ var wall_sprite = [
 ];
 
 var beast_sprite = [
-    0,0,7,
+    0,0,5,
     7,7,7,
     7,0,7
 ];
@@ -35,6 +35,25 @@ var stair_down_sprite = [
     0,6,5
 ];
 
+var skull_sprite = [
+    0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+    0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+    0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+    0,0,0,0,9,9,9,0,0,9,9,9,0,0,0,0,
+    0,0,0,9,9,9,9,0,0,9,9,9,9,0,0,0,
+    0,0,0,9,9,9,0,0,0,0,9,9,9,0,0,0,
+    0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+    0,0,0,0,0,0,0,9,9,0,0,0,0,0,0,0,
+    0,0,0,0,0,0,9,9,9,9,0,0,0,0,0,0,
+    0,0,0,0,0,0,9,9,9,9,0,0,0,0,0,0,
+    0,0,0,0,0,0,9,0,0,9,0,0,0,0,0,0,
+    0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+    0,0,0,0,9,9,9,9,9,9,9,9,0,0,0,0,
+    0,0,0,9,9,9,9,9,9,9,9,9,9,0,0,0,
+    0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+    0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+];
+
 /**** Thing class ****/
 
 function Thing(x, y, sprite) {
@@ -48,27 +67,13 @@ function Thing(x, y, sprite) {
 }
 Thing.prototype = {
     move: function(xdir, ydir) {
-        if (this.dead) return;
+        if (this.dead) return false;
         
         var move_result = this.test_move(this.x+xdir, this.y+ydir);
         if (move_result == "moved") {
             this.level.remove(this);
             this.x += xdir;
             this.y += ydir;
-            this.level.add(this);
-            return true;
-        } else if (move_result == "down") {
-            this.level.remove(this);
-            this.x += xdir;
-            this.y += ydir;
-            this.level = levels[this.level.depth+1];
-            this.level.add(this);
-            return true;
-        } else if (move_result == "up") {
-            this.level.remove(this);
-            this.x += xdir;
-            this.y += ydir;
-            this.level = levels[this.level.depth-1];
             this.level.add(this);
             return true;
         } else if (move_result == "acted") {
@@ -78,9 +83,26 @@ Thing.prototype = {
         }
     },
 
+    act: function() {
+        var cell = this.level.map[this.x][this.y];
+        for (var i = cell.length-1; i >= 0; i--) {
+            var thing = cell[i];
+            if (thing == this.level.stair_down) {
+                this.level.remove(this);
+                this.level = levels[this.level.depth+1];
+                this.level.add(this);
+            } else if (thing == this.level.stair_up) {
+                this.level.remove(this);
+                this.level = levels[this.level.depth-1];
+                this.level.add(this);
+            }
+        }
+        return true;
+    },
+
     test_move: function(x, y) {
         if (x >= 0 && x < 5 && y >= 0 && y < 5) {
-            for (var i in this.level.map[x][y]) {
+            for (var i = this.level.map[x][y].length-1; i >= 0; i--) {
                 var thing = this.level.map[x][y][i];
                 if (thing.wall) {
                     return "blocked";
@@ -92,10 +114,6 @@ Thing.prototype = {
                     return "acted";
                 } else if (this.enemy && thing.enemy) {
                     return "blocked";
-                } else if (this.player && thing == this.level.stair_down) {
-                    return "down";
-                } else if (this.player && thing == this.level.stair_up) {
-                    return "up";
                 }
             }
             return "moved";
@@ -122,18 +140,31 @@ Level = function(depth) {
         [[],[],[],[],[]],
         [[],[],[],[],[]]
     ];
+    this.free_cells = [];
+
+    var maze_gen = new ROT.Map.EllerMaze(7, 7);
+    maze_gen.create(this.make_wall.bind(this));
 
     if (depth > 0) {
-        this.stair_up = new Thing(levels[depth-1].stair_down.x, levels[depth-1].stair_down.y, stair_up_sprite);
+        var x = levels[depth-1].stair_down.x;
+        var y = levels[depth-1].stair_down.y;
+        var cell = $.grep(this.free_cells, function(i) {return i[0] == x && i[1] == y})[0];
+        if (this.free_cells.indexOf(cell) >= 0) {
+            this.free_cells.splice(this.free_cells.indexOf(cell), 1);
+        }
+        this.map[x][y].length = 0; // Make sure this cell is free of walls.
+        this.stair_up = new Thing(x, y, stair_up_sprite);
         this.add(this.stair_up);
     }
     
     if (depth < numlevels - 1) {
         while (!this.stair_down) {
-            var x = Math.floor(Math.random()*5);
-            var y = Math.floor(Math.random()*5);
+            var cell = this.free_cells[Math.floor(ROT.RNG.getUniform() * this.free_cells.length)];
+            var x = cell[0];
+            var y = cell[1];
             if (this.map[x][y].indexOf(this.stair_up) < 0) {
                 this.stair_down = new Thing(x, y, stair_down_sprite);
+                this.free_cells.splice(this.free_cells.indexOf(cell), 1);
             }
         }
         this.add(this.stair_down);
@@ -141,24 +172,36 @@ Level = function(depth) {
 
     if (depth == 0) {
         this.add(player);
+        var cell = $.grep(this.free_cells, function(i) {return i[0] == player.x && i[1] == player.y})[0];
+        if (this.free_cells.indexOf(cell) >= 0) {
+            this.free_cells.splice(this.free_cells.indexOf(cell), 1);
+        }
     }
 
     for (var i = 0; i < depth+1; i++) {
-        var x = Math.floor(Math.random()*5);
-        var y = Math.floor(Math.random()*5);
+        var cell = this.free_cells[Math.floor(ROT.RNG.getUniform() * this.free_cells.length)];
+        var x = cell[0];
+        var y = cell[1];
         this.add(this.beast(x, y));
+        this.free_cells.splice(this.free_cells.indexOf(cell), 1);
     }
 }
 
 Level.prototype = {
-    wall: function(x, y) {
-        var wall = new Thing(x, y, wall_sprite);
-        wall.wall = true;
-        return wall;
+    make_wall: function(x, y, value) {
+        if (x > 0 && y > 0 && x <= W && y <= H) {
+            if (value != 0) {
+                var wall = new Thing(x-1, y-1, wall_sprite);
+                wall.wall = true;
+                this.add(wall);
+            } else {
+                this.free_cells.push([x-1,y-1]);
+            }
+        }
     },
 
     beast: function(x, y) {
-        var beast = new Thing(3, 2, beast_sprite);
+        var beast = new Thing(x, y, beast_sprite);
         beast.enemy = true;
         return beast;
     },
@@ -173,30 +216,38 @@ Level.prototype = {
     },
 }
 
-
 /**** Setup ****/
-var small_canvas = document.createElement('canvas');
-small_canvas.width = small_canvas.height = 16;
+function setup() {
+    window.W = 5;
+    window.H = 5;
+    window.small_canvas = document.createElement('canvas');
+    small_canvas.width = small_canvas.height = 16;
 
-var small_ctx = small_canvas.getContext("2d");
+    window.small_ctx = small_canvas.getContext("2d");
 
-var canvas = document.createElement('canvas');
-canvas.width = canvas.height = 128;
+    window.canvas = document.createElement('canvas');
+    canvas.width = canvas.height = 128;
 
-var ctx = canvas.getContext("2d");
-ctx.scale(canvas.width/small_canvas.width, canvas.height/small_canvas.height);
+    window.ctx = canvas.getContext("2d");
+    ctx.scale(canvas.width/small_canvas.width, canvas.height/small_canvas.height);
 
-var bmp = null
+    window.bmp = null
+    restart();
+}
 
-var player = new Thing(0, 0, human_sprite);
-player.player = true;
-player.hp = 10;
-player.mp = 10;
 
-var numlevels = 10;
-var levels = [];
-for (var i = 0; i < numlevels; i++) {
-    levels.push(new Level(i));
+function restart() {
+    window.player = new Thing(0, 0, human_sprite);
+    player.player = true;
+    player.hp = 10;
+    player.mp = 10;
+
+    window.numlevels = 10;
+    window.levels = [];
+    for (var i = 0; i < numlevels; i++) {
+        levels.push(new Level(i));
+    }
+    render();
 }
 
 /**** Rendering ****/
@@ -205,6 +256,18 @@ function draw_sprite(sprite, x, y) {
         for (var j = 0; j < 3; j++) {
             var idx = ((x*3+i) + (y*3+j) * 16) * 4;
             bmp.data[idx] = bmp.data[idx+1] = bmp.data[idx+2] = sprite[i+j*3]*25;
+            bmp.data[idx+3] = 255;
+        }
+    }
+}
+
+function draw_bigsprite(sprite) {
+    for (var i = 0; i < 16; i++) {
+        for (var j = 0; j < 16; j++) {
+            var idx = (i + j*16) * 4;
+            console.log(i+j*16);
+            //console.log(sprite[i+j*W]);
+            bmp.data[idx] = bmp.data[idx+1] = bmp.data[idx+2] = sprite[i+j*16]*25;
             bmp.data[idx+3] = 255;
         }
     }
@@ -237,22 +300,26 @@ function clear_screen() {
 }
 
 function render() {
-
     small_ctx.webkitImageSmoothingEnabled = small_ctx.mozImageSmoothingEnabled = small_ctx.imageSmoothingEnabled = false;
     ctx.webkitImageSmoothingEnabled = ctx.mozImageSmoothingEnabled = ctx.imageSmoothingEnabled = false;
     bmp = small_ctx.createImageData(16, 16);
 
     clear_screen();
 
-    for (var i in player.level.map) {
-        for (var j in player.level.map[i]) {
-            if (player.level.map[i][j].length > 0) {
-                draw_sprite(player.level.map[i][j][player.level.map[i][j].length-1].sprite, i, j);
+    if (player.dead) {
+        draw_bigsprite(skull_sprite);
+    } else {
+        for (var i = 0; i < W; i++) {
+            for (var j = 0; j < H; j++) {
+                if (player.level.map[i][j].length > 0) {
+                    var thing = player.level.map[i][j][player.level.map[i][j].length-1];
+                    draw_sprite(thing.sprite, i, j);
+                }
             }
         }
+        
+        draw_health();
     }
-    
-    draw_health();
 
     small_ctx.putImageData(bmp, 0, 0);
     
@@ -264,7 +331,8 @@ function render() {
 }
 
 $(window).keydown(function(evt) {
-    var moved = true;
+    //evt.preventDefault();
+    var moved = false;
     if (evt.keyCode == 87) { // W
         moved = player.move(0, -1);
     } else if (evt.keyCode == 83) { // S
@@ -273,9 +341,15 @@ $(window).keydown(function(evt) {
         movded = player.move(-1, 0);
     } else if (evt.keyCode == 68) { // D
         moved = player.move(1, 0);
+    } else if (evt.keyCode == 82) { // R
+        restart();
+        return;
+    } else if (evt.keyCode == 32) { // Space
+        moved = player.act();
     } else {
-        moved = false;
+        console.log(evt.keyCode);
     }
+     
     if (moved) {
         for (var i in player.level.map) {
             for (var j in player.level.map[i]) {
@@ -303,5 +377,5 @@ $(function() {
             $('body').append(canvas);
         }
     });
-    render();
+    setup();
 });
