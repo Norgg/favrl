@@ -244,7 +244,19 @@ Level = function(depth) {
 
     this.fov = new ROT.FOV.PreciseShadowcasting(this.transparent.bind(this));
 
-    if (depth > 0) {
+    if (depth == 0) { // First level
+        this.add(player);
+        var cell = $.grep(this.free_cells, function(i) {return i[0] == player.x && i[1] == player.y})[0];
+        if (this.free_cells.indexOf(cell) >= 0) {
+            this.free_cells.splice(this.free_cells.indexOf(cell), 1);
+        }
+
+        var cell = this.free_cells.random();
+        this.portal = new Thing(cell[0], cell[1], portal_sprite);
+        this.portal.portal = true;
+        this.add(this.portal);
+        this.free_cells.splice(this.free_cells.indexOf(cell), 1);
+    } else { // Not first level
         var x = levels[depth-1].stair_down.x;
         var y = levels[depth-1].stair_down.y;
         var cell = $.grep(this.free_cells, function(i) {return i[0] == x && i[1] == y})[0];
@@ -254,34 +266,20 @@ Level = function(depth) {
         this.map[x][y].length = 0; // Make sure this cell is free of walls.
         this.stair_up = new Thing(x, y, stair_up_sprite);
         this.add(this.stair_up);
-    } else { // First level.
-        var cell = this.free_cells.random();
-        this.portal = new Thing(cell[0], cell[1], portal_sprite);
-        this.portal.portal = true;
-        this.add(this.portal);
-        this.free_cells.splice(this.free_cells.indexOf(cell), 1);
     }
     
-    if (depth < numlevels - 1) {
+    if (depth == numlevels - 1) { // Last level
+        var cell = this.free_cells.random();
+        this.add(this.treasure(cell[0], cell[1]));
+        this.free_cells.splice(this.free_cells.indexOf(cell), 1);
+    } else { // Not last level
         var cell = this.free_cells.random();
         this.stair_down = new Thing(cell[0], cell[1], stair_down_sprite);
         this.free_cells.splice(this.free_cells.indexOf(cell), 1);
         this.add(this.stair_down);
-    } else { // Last level.
-        var cell = this.free_cells.random();
-        this.add(this.treasure(cell[0], cell[1]));
-        this.free_cells.splice(this.free_cells.indexOf(cell), 1);
     }
 
-    if (depth == 0) {
-        this.add(player);
-        var cell = $.grep(this.free_cells, function(i) {return i[0] == player.x && i[1] == player.y})[0];
-        if (this.free_cells.indexOf(cell) >= 0) {
-            this.free_cells.splice(this.free_cells.indexOf(cell), 1);
-        }
-    }
-
-    for (var i = 0; i < depth+1; i++) {
+    for (var i = 0; i < depth+1; i++) { // Add some enemies
         var cell = this.free_cells.random();
         if (cell) {
             this.add(this.beast(cell[0], cell[1]));
@@ -579,7 +577,7 @@ $(function() {
         evt.preventDefault();
         if (!$('canvas').length) {
             $('#toosmall').after("<p>FINE.</p>");
-            $('body').append(canvas);
+            $('#wrap').append(canvas);
         }
     });
     setup();
