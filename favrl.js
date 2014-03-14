@@ -1,38 +1,44 @@
 /**** Sprites ****/
+var floor_sprite = [
+    0,0,0,
+    0,0,0,
+    0,0,0
+];
+
 var human_sprite = [
     9,5,9,
-    0,9,0,
-    9,0,9
+    $,9,$,
+    9,$,9
 ];
 
 var wall_sprite = [
-    5,5,5,
-    5,5,5,
-    5,5,5
+    3,3,3,
+    3,3,3,
+    3,3,3
 ];
 
 var beast_sprite = [
-    0,0,5,
+    $,$,5,
     7,7,7,
-    7,0,7
+    7,$,7
 ];
 
 var door_sprite = [
-    0,9,0,
+    $,9,$,
     9,0,9,
     9,0,9
 ];
 
 var stair_up_sprite = [
     0,0,5,
-    0,7,6,
-    9,8,0
+    0,7,7,
+    9,9,9
 ];
 
 var stair_down_sprite = [
     9,0,0,
-    8,7,0,
-    0,6,5
+    7,7,0,
+    5,5,5
 ];
 
 var skull_sprite = [
@@ -64,11 +70,12 @@ function Thing(x, y, sprite) {
     this.player = false;
     this.enemy = false;
     this.hp = 3;
+    this.maxhp = 3;
+    this.maxmp = 16;
 }
 Thing.prototype = {
     move: function(xdir, ydir) {
         if (this.dead) return false;
-        
         var move_result = this.test_move(this.x+xdir, this.y+ydir);
         if (move_result == "moved") {
             this.level.remove(this);
@@ -83,6 +90,28 @@ Thing.prototype = {
         }
     },
 
+    test_move: function(x, y) {
+        if (x >= 0 && x < W && y >= 0 && y < H) {
+            for (var i = this.level.map[x][y].length-1; i >= 0; i--) {
+                var thing = this.level.map[x][y][i];
+                if (thing.wall) {
+                    return "blocked";
+                } else if (this.player && thing.enemy) {
+                    thing.damage(this);
+                    return "acted";
+                } else if (this.enemy && thing.player) {
+                    player.damage(this);
+                    return "acted";
+                } else if (this.enemy && thing.enemy) {
+                    return "blocked";
+                }
+            }
+            return "moved";
+        } else {
+            return "blocked";
+        }
+    },
+    
     act: function() {
         var cell = this.level.map[this.x][this.y];
         for (var i = cell.length-1; i >= 0; i--) {
@@ -100,33 +129,56 @@ Thing.prototype = {
         return true;
     },
 
-    test_move: function(x, y) {
-        if (x >= 0 && x < 5 && y >= 0 && y < 5) {
-            for (var i = this.level.map[x][y].length-1; i >= 0; i--) {
-                var thing = this.level.map[x][y][i];
-                if (thing.wall) {
-                    return "blocked";
-                } else if (this.player && thing.enemy) {
-                    thing.damage();
-                    return "acted";
-                } else if (this.enemy && thing.player) {
-                    player.damage();
-                    return "acted";
-                } else if (this.enemy && thing.enemy) {
-                    return "blocked";
+    magic: function() {
+        if (this.mp >= 1) {
+            if (this.mp >= 5 && this.maxhp < 16) {
+                this.maxhp++;
+            }
+            
+            this.hp += Math.floor(this.mp/2);
+            if (this.hp > this.maxhp) {
+                this.hp = this.maxhp;
+            }
+
+            if (this.mp >= 10) { // Destroy everything adjacent.
+                for (var i = this.x - 1; i <= this.x + 1; i++) {
+                    for (var j = this.y - 1; j <= this.y + 1; j++) {
+                        if (i >= 0 && i < W && j >= 0 && j < H) {
+                            for (var t in this.level.map[i][j]) {
+                                var thing = this.level.map[i][j][t];
+                                if (thing.enemy || thing.wall) {
+                                    this.level.remove(thing);
+                                }
+                            }
+                        }
+                    }
                 }
             }
-            return "moved";
+
+            if (this.mp >= 3) {
+                var cell = this.level.free_cells.random();
+                this.level.remove(this);
+                this.x = cell[0];
+                this.y = cell[1];
+                this.level.add(this);
+            }
+
+            this.mp = 0;
+            return true;
         } else {
-            return "blocked";
+            return false;
         }
     },
 
-    damage: function() {
+    damage: function(by) {
         this.hp--;
         if (this.hp == 0) {
             this.dead = true;
             this.level.remove(this);
+
+            if (by && by.mp < by.maxmp) {
+                by.mp++;
+            }
         }
     },
 }
@@ -159,7 +211,7 @@ Level = function(depth) {
     
     if (depth < numlevels - 1) {
         while (!this.stair_down) {
-            var cell = this.free_cells[Math.floor(ROT.RNG.getUniform() * this.free_cells.length)];
+            var cell = this.free_cells.random();
             var x = cell[0];
             var y = cell[1];
             if (this.map[x][y].indexOf(this.stair_up) < 0) {
@@ -179,7 +231,7 @@ Level = function(depth) {
     }
 
     for (var i = 0; i < depth+1; i++) {
-        var cell = this.free_cells[Math.floor(ROT.RNG.getUniform() * this.free_cells.length)];
+        var cell = this.free_cells.random();
         var x = cell[0];
         var y = cell[1];
         this.add(this.beast(x, y));
@@ -214,6 +266,27 @@ Level.prototype = {
     remove: function(thing) {
         this.map[thing.x][thing.y].splice(this.map[thing.x][thing.y].indexOf(thing), 1);
     },
+
+    update: function() {
+        this.free_cells = [];
+        for (var i = 0; i < this.map.length; i++) {
+            for (var j = 0; j < this.map.length; j++) {
+                if (this.map[i][j].length == 0) {
+                    this.free_cells.push([i,j]);
+                }
+                for (var t in this.map[i][j]) {
+                    var thing = this.map[i][j][t];
+                    if (thing.enemy) {
+                        if (Math.random() > 0.5) {
+                            thing.move(Math.floor((Math.random() - 1/3.0) * 3), 0);
+                        } else {
+                            thing.move(0, Math.floor((Math.random() - 1/3.0) * 3));
+                        }
+                    }
+                }
+            }
+        }
+    },
 }
 
 /**** Setup ****/
@@ -239,8 +312,10 @@ function setup() {
 function restart() {
     window.player = new Thing(0, 0, human_sprite);
     player.player = true;
-    player.hp = 10;
+    player.hp = 5;
+    player.maxhp = 5;
     player.mp = 10;
+    player.maxmp = 16;
 
     window.numlevels = 10;
     window.levels = [];
@@ -251,12 +326,15 @@ function restart() {
 }
 
 /**** Rendering ****/
-function draw_sprite(sprite, x, y) {
+function draw_sprite(sprite, x, y, filter) {
     for (var i = 0; i < 3; i++) {
         for (var j = 0; j < 3; j++) {
             var idx = ((x*3+i) + (y*3+j) * 16) * 4;
-            bmp.data[idx] = bmp.data[idx+1] = bmp.data[idx+2] = sprite[i+j*3]*25;
-            bmp.data[idx+3] = 255;
+            var c = sprite[i+j*3];
+            if (c != $) {
+                bmp.data[idx] = bmp.data[idx+1] = bmp.data[idx+2] = c*25;
+                bmp.data[idx+3] = 255;
+            }
         }
     }
 }
@@ -311,6 +389,7 @@ function render() {
     } else {
         for (var i = 0; i < W; i++) {
             for (var j = 0; j < H; j++) {
+                draw_sprite(floor_sprite, i, j);
                 if (player.level.map[i][j].length > 0) {
                     var thing = player.level.map[i][j][player.level.map[i][j].length-1];
                     draw_sprite(thing.sprite, i, j);
@@ -333,38 +412,27 @@ function render() {
 $(window).keydown(function(evt) {
     //evt.preventDefault();
     var moved = false;
-    if (evt.keyCode == 87) { // W
+    if (evt.keyCode == 87 || evt.keyCode == 75 || evt.keyCode == 38) { // W|K|Up
         moved = player.move(0, -1);
-    } else if (evt.keyCode == 83) { // S
+    } else if (evt.keyCode == 83 || evt.keyCode == 74 || evt.keyCode == 40) { // S|J|Down
         moved = player.move(0, 1);
-    } else if (evt.keyCode == 65) { // A
+    } else if (evt.keyCode == 65 || evt.keyCode == 72 || evt.keyCode == 37) { // A|H|Left
         movded = player.move(-1, 0);
-    } else if (evt.keyCode == 68) { // D
+    } else if (evt.keyCode == 68 || evt.keyCode == 76 || evt.keyCode == 39) { // D|L|Right
         moved = player.move(1, 0);
     } else if (evt.keyCode == 82) { // R
         restart();
         return;
     } else if (evt.keyCode == 32) { // Space
         moved = player.act();
+    } else if (evt.keyCode == 77) { // M
+        moved = player.magic();
     } else {
         console.log(evt.keyCode);
     }
      
     if (moved) {
-        for (var i in player.level.map) {
-            for (var j in player.level.map[i]) {
-                for (var t in player.level.map[i][j]) {
-                    var thing = player.level.map[i][j][t];
-                    if (thing.enemy) {
-                        if (Math.random() > 0.5) {
-                            thing.move(Math.floor((Math.random() - 1/3.0) * 3), 0);
-                        } else {
-                            thing.move(0, Math.floor((Math.random() - 1/3.0) * 3));
-                        }
-                    }
-                }
-            }
-        }
+        player.level.update();
     }
     render();
 });
