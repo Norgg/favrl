@@ -8,6 +8,18 @@ var floor_sprite = [
     9,9,9
 ];
 
+var dark_floor_sprite = [
+    5,5,5,
+    5,5,5,
+    5,5,5
+];
+
+var unseen_sprite = [
+    0,0,0,
+    0,0,0,
+    0,0,0
+];
+
 var human_sprite = [
     2,4,2,
     $,2,$,
@@ -21,9 +33,9 @@ var badman_sprite = [
 ];
 
 var wall_sprite = [
-    0,0,0,
-    0,0,0,
-    0,0,0
+    3,3,3,
+    3,3,3,
+    3,3,3
 ];
 
 var beast_sprite = [
@@ -177,11 +189,13 @@ Thing.prototype = {
                 this.level.remove(this);
                 this.level = levels[this.level.depth+1];
                 this.level.add(this);
+                this.level.checkfov();
                 return false; // Don't update next floor after switching.
             } else if (thing == this.level.stair_up) {
                 this.level.remove(this);
                 this.level = levels[this.level.depth-1];
                 this.level.add(this);
+                this.level.checkfov();
                 return false; // Don't update next floor after switching.
             } else if (thing.pickup) {
                 if (this.inventory.length < INVW*INVH) {
@@ -217,7 +231,7 @@ Thing.prototype = {
                 for (var i = this.x - 1; i <= this.x + 1; i++) {
                     for (var j = this.y - 1; j <= this.y + 1; j++) {
                         if (i >= 0 && i < W && j >= 0 && j < H) {
-                            for (var t in this.level.map[i][j]) {
+                            for (var t = 0; t < this.level.map[i][j].length; t++) {
                                 var thing = this.level.map[i][j][t];
                                 if (thing.enemy || thing.wall) {
                                     this.level.remove(thing);
@@ -422,14 +436,13 @@ Level.prototype = {
         this.map[thing.x][thing.y].splice(this.map[thing.x][thing.y].indexOf(thing), 1);
     },
 
-    update: function() {
-        //console.log("Updating.");
-        var pathfind = new ROT.Path.AStar(player.x, player.y, this.passable.bind(this), {topology: 4});
-
+    checkfov: function() {
         if (player.level == this) {
             this.fov.compute(player.x, player.y, 5, function(x, y, r, visibility) {
                 if (x >= 0 && y >= 0 && x < W && y < H) {
                     //console.log(x, y);
+                    this.map[x][y].lit = true;
+                    this.map[x][y].seen = true;
                     for (var t in this.map[x][y]) {
                         var thing = this.map[x][y][t];
                         if (thing.enemy) {
@@ -439,20 +452,28 @@ Level.prototype = {
                 }
             }.bind(this));
         }
+    },
 
-        // Reset moved state of all enemies.
+    update: function() {
+        //console.log("Updating.");
+        var pathfind = new ROT.Path.AStar(player.x, player.y, this.passable.bind(this), {topology: 4});
+
+        // Reset moved state of all enemies and lit state of map.
         for (var i = 0; i < this.map.length; i++) {
             for (var j = 0; j < this.map.length; j++) {
-                for (var t in this.map[i][j]) {
+                this.map[i][j].lit = false;
+                for (var t = 0; t < this.map[i][j].length; t++) {
                     var thing = this.map[i][j][t];
                     if (thing.enemy) thing.moved = false;
                 }
             }
         }
+        
+        this.checkfov();
 
         for (var i = 0; i < this.map.length; i++) {
             for (var j = 0; j < this.map.length; j++) {
-                for (var t in this.map[i][j]) {
+                for (var t = 0; t < this.map[i][j].length; t++) {
                     var thing = this.map[i][j][t];
                     if (thing.enemy) {
                         if (thing.moved) continue; // Make sure we don't double-process an enemy.
@@ -494,7 +515,7 @@ Level.prototype = {
         if (x >= 0 && y >= 0 && x < W && y < H) {
             for (var t = 0; t < this.map[x][y].length; t++) {
                 var thing = this.map[x][y][t]
-                if (thing.wall || thing.enemy) {
+                if (thing.wall) {
                     return false;
                 }
             }
@@ -554,6 +575,7 @@ function restart() {
     for (var i = 0; i < numlevels; i++) {
         levels.push(new Level(i));
     }
+    levels[0].checkfov();
     render();
 }
 
@@ -653,10 +675,20 @@ function render() {
     } else {
         for (var i = 0; i < W; i++) {
             for (var j = 0; j < H; j++) {
-                draw_sprite(floor_sprite, i, j);
-                for (var t = 0; t < player.level.map[i][j].length; t++) {
-                    var thing = player.level.map[i][j][t];
-                    draw_sprite(thing.sprite, i, j);
+                if (player.level.map[i][j].seen) {
+                    if (player.level.map[i][j].lit) {
+                        draw_sprite(floor_sprite, i, j);
+                    } else {
+                        draw_sprite(dark_floor_sprite, i, j);
+                    }
+                    for (var t = 0; t < player.level.map[i][j].length; t++) {
+                        var thing = player.level.map[i][j][t];
+                        if (player.level.map[i][j].lit || !thing.enemy) {
+                            draw_sprite(thing.sprite, i, j);
+                        }
+                    }
+                } else {
+                    draw_sprite(unseen_sprite, i, j);
                 }
             }
         }
