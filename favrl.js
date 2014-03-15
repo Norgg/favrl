@@ -1,50 +1,50 @@
 /**** Sprites ****/
 var floor_sprite = [
+    9,9,9,
+    9,9,9,
+    9,9,9
+];
+
+var human_sprite = [
+    2,4,2,
+    $,2,$,
+    2,$,2
+];
+
+var wall_sprite = [
     0,0,0,
     0,0,0,
     0,0,0
 ];
 
-var human_sprite = [
-    9,5,9,
-    $,9,$,
-    9,$,9
-];
-
-var wall_sprite = [
-    3,3,3,
-    3,3,3,
-    3,3,3
-];
-
 var beast_sprite = [
     $,$,5,
-    7,7,7,
-    7,$,7
+    3,3,3,
+    3,$,3
 ];
 
 var treasure_sprite = [
-    8,9,8,
-    8,0,8,
-    8,8,8
+    7,8,7,
+    7,0,7,
+    7,7,7
 ];
 
 var portal_sprite = [
-    $,7,$,
-    7,9,7,
-    7,9,7
+    $,5,$,
+    5,1,5,
+    5,1,5
 ];
 
 var stair_up_sprite = [
-    0,0,5,
-    0,7,7,
-    9,9,9
+    $,$,1,
+    $,3,3,
+    5,5,5
 ];
 
 var stair_down_sprite = [
-    9,0,0,
-    7,7,0,
-    5,5,5
+    8,2,2,
+    5,5,2,
+    3,3,3
 ];
 
 var skull_sprite = [
@@ -70,9 +70,9 @@ var win_sprite = [
     0,7,0,0,0,0,8,0,0,0,0,0,0,9,9,9,
     0,0,0,9,0,0,0,0,0,0,9,0,0,9,9,9,
     0,0,0,0,0,0,0,7,0,0,0,0,0,0,9,9,
-    0,8,0,8,9,8,0,0,0,0,0,0,7,0,0,0,
-    0,0,0,8,0,8,0,5,5,5,0,0,0,0,9,0,
-    0,0,0,8,8,8,0,5,5,5,0,0,9,0,0,0,
+    0,8,0,7,8,7,0,0,0,0,0,0,7,0,0,0,
+    0,0,0,7,0,7,0,5,5,5,0,0,0,0,9,0,
+    0,0,0,7,7,7,0,5,5,5,0,0,9,0,0,0,
     9,0,0,0,9,0,0,5,5,5,0,0,9,0,0,0,
     0,0,7,0,9,9,9,9,9,9,9,9,9,0,0,8,
     0,0,0,0,0,0,0,9,9,9,0,0,0,0,0,0,
@@ -341,8 +341,6 @@ Level.prototype = {
             }.bind(this));
         }
 
-        this.free_cells = [];
-
         // Reset moved state of all enemies.
         for (var i = 0; i < this.map.length; i++) {
             for (var j = 0; j < this.map.length; j++) {
@@ -355,9 +353,6 @@ Level.prototype = {
 
         for (var i = 0; i < this.map.length; i++) {
             for (var j = 0; j < this.map.length; j++) {
-                if (this.map[i][j].length == 0) {
-                    this.free_cells.push([i,j]);
-                }
                 for (var t in this.map[i][j]) {
                     var thing = this.map[i][j][t];
                     if (thing.enemy) {
@@ -381,6 +376,16 @@ Level.prototype = {
                         }
                         thing.sees_player = false;
                     }
+                }
+            }
+        }
+
+        // Update free cells.
+        this.free_cells = [];
+        for (var i = 0; i < this.map.length; i++) {
+            for (var j = 0; j < this.map.length; j++) {
+                if (this.map[i][j].length == 0) {
+                    this.free_cells.push([i,j]);
                 }
             }
         }
@@ -455,10 +460,10 @@ function restart() {
 function draw_sprite(sprite, x, y, filter) {
     for (var i = 0; i < 3; i++) {
         for (var j = 0; j < 3; j++) {
-            var idx = ((x*3+i+1) + (y*3+j+1) * 16) * 4;
+            var idx = ((x*3+i) + (y*3+j) * 16) * 4;
             var c = sprite[i+j*3];
             if (c != $) {
-                bmp.data[idx] = bmp.data[idx+1] = bmp.data[idx+2] = c*25;
+                bmp.data[idx] = bmp.data[idx+1] = bmp.data[idx+2] = c*28;
                 bmp.data[idx+3] = 255;
             }
         }
@@ -469,7 +474,7 @@ function draw_bigsprite(sprite) {
     for (var i = 0; i < 16; i++) {
         for (var j = 0; j < 16; j++) {
             var idx = (i + j*16) * 4;
-            bmp.data[idx] = bmp.data[idx+1] = bmp.data[idx+2] = sprite[i+j*16]*25;
+            bmp.data[idx] = bmp.data[idx+1] = bmp.data[idx+2] = sprite[i+j*16]*28;
             bmp.data[idx+3] = 255;
         }
     }
@@ -477,14 +482,14 @@ function draw_bigsprite(sprite) {
 
 function draw_health() {
     for (var i = 0; i < player.hp; i++) {
-        var idx = (i * 16) * 4;
+        var idx = (15 + i * 16) * 4;
         bmp.data[idx] = 255;
         bmp.data[idx+1] = bmp.data[idx+2] = 0;
         bmp.data[idx+3] = 255;
     }
 
     for (var i = 0; i < player.mp; i++) {
-        var idx = (i + 1 + 0 * 16) * 4;
+        var idx = (i + 15 * 16) * 4;
         bmp.data[idx] = bmp.data[idx+1] = 0;
         bmp.data[idx+2] = 255;
         bmp.data[idx+3] = 255;
@@ -495,7 +500,7 @@ function clear_screen() {
     for (var i = 0; i < 16; i++) {
         for (var j = 0; j < 16; j++) {
             var idx = (i + j * 16) * 4;
-            bmp.data[idx] = bmp.data[idx+1] = bmp.data[idx+2] = 0;
+            bmp.data[idx] = bmp.data[idx+1] = bmp.data[idx+2] = 255;
             bmp.data[idx+3] = 255;
         }
     }
