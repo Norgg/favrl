@@ -446,7 +446,7 @@ Level.prototype = {
         var beast = new Thing(x, y, beast_sprite);
         beast.enemy = true;
         var roll = ROT.RNG.getUniform();
-        if (roll < 0.35) {
+        if (roll < 0.3) {
             beast.inventory.push(this.hp_pot());
         } else if (roll < 0.6) {
             beast.inventory.push(this.mp_pot());
