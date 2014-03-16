@@ -402,9 +402,13 @@ $(function() {
     $('#toosmall').click(function(evt) {
         evt.preventDefault();
         if (!$('canvas').length) {
-            $('#toosmall').after("<p>FINE.</p>");
-            $('#wrap').append(canvas);
+            $('#toosmallp').append("<p><b>FINE</b>.</p>");
+            $('#toosmallp').append(canvas);
         }
+    });
+    $('#hints').click(function(evt) {
+        evt.preventDefault();
+        $('#hintsul').toggle(50);
     });
     setup();
 });

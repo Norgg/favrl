@@ -12,6 +12,7 @@
         body { font-family: sans-serif; background: black; margin: 0px; padding: 0px; }
         a { text-decoration: none; color: #999; }
         #wrap { width: 400px; margin: 0px auto; padding: 5px; background: #222; color: white;}
+        #hintsul { display: none; }
     </style>
 </head>
 <body>
@@ -27,7 +28,14 @@
             N to wait.<br/>
             R to restart.
         </p>
-        <p>&gt; <a href="" id="toosmall">But it's too small/laggy! D:</a></p>
+        <p id="toosmallp">&gt; <a href="" id="toosmall">But it's too small/laggy! D:</a></p>
+        <p>&gt; <a href="" id="hints">Gimme hints!</a>
+            <ul id="hintsul">
+                <li>You'll need to use magic to win.</li>
+                <li>The more magic you use at once, the more things it will do.</li>
+                <li>There are 10 levels.</li>
+            </ul>
+        </p>
     </div>
 </body>
 </html>
