@@ -223,8 +223,10 @@ Thing.prototype = {
                             }
                         }
                     }
+                    return true;
+                } else {
+                    return false;
                 }
-                return true;
             } else if (thing.portal) {
                 for (var inv = 0; inv < this.inventory.length; inv++) {
                     var inv_thing = this.inventory[inv];
@@ -242,7 +244,7 @@ Thing.prototype = {
     magic: function() {
         if (this.mp >= 1) {
             if (this.mp >= 2 && this.maxhp < 16) {
-                this.maxhp++;
+                this.maxhp += Math.max(1, Math.floor(this.mp/3));  // Add at least 1 maxhp, so casting every 2mp is still optimal but saving is more useful.
             }
             
             if (this.mp >= 4) { // Destroy everything adjacent.
@@ -444,7 +446,7 @@ Level.prototype = {
         var beast = new Thing(x, y, beast_sprite);
         beast.enemy = true;
         var roll = ROT.RNG.getUniform();
-        if (roll < 0.3) {
+        if (roll < 0.35) {
             beast.inventory.push(this.hp_pot());
         } else if (roll < 0.6) {
             beast.inventory.push(this.mp_pot());
@@ -759,7 +761,6 @@ function render() {
                             var filter = undefined;
                             if (thing.hurt) {
                                 filter = function(px) {
-                                    console.log("ow.");
                                     if (px == $) {
                                         return px;
                                     } else if (px.length) {
@@ -840,7 +841,6 @@ $(window).keydown(function(evt) {
             moved = true;
         }
     } else if (evt.keyCode == 73) { // I
-        console.log("inv");
         player.in_inventory = !player.in_inventory;
     } else {
         //console.log(evt.keyCode);
