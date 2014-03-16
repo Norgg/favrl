@@ -1,3 +1,6 @@
+// favRL by Norgg, MIT licensed, but would love a shout on Twitter @Norgg if you use this for whatever reason.
+// Jam code, sorry for lack of comments.
+
 /**** Sprites ****/
 var m = [0,0,9]; // magic
 var _ = [9,0,0]; // health
