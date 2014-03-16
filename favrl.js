@@ -44,6 +44,12 @@ var beast_sprite = [
     3,$,3
 ];
 
+var blob_sprite = [
+    $,2,$,
+    2,1,2,
+    0,0,0
+];
+
 var treasure_sprite = [
     7,8,7,
     7,$,7,
@@ -136,7 +142,7 @@ function Thing(x, y, sprite) {
     this.player = false;
     this.enemy = false;
     this.hp = 1;
-    this.maxhp = 3;
+    this.maxhp = 1;
     this.maxmp = 16;
     this.inventory = [];
     this.selected = [0, 0];
@@ -172,6 +178,8 @@ Thing.prototype = {
                     return "acted";
                 } else if (this.enemy && thing.enemy) {
                     return "blocked";
+                } else if (this.enemy && this.level != player.level && (thing == this.level.stair_up || thing == this.level.stair_down)) {
+                    return "blocked"; // Don't let enemies wander onto the stairs while the player isn't there.
                 }
             }
             
@@ -201,6 +209,20 @@ Thing.prototype = {
                 if (this.inventory.length < INVW*INVH) {
                     this.inventory.push(thing);
                     this.level.remove(thing);
+                    if (thing.treasure) {
+                        // When the ring is picked up, spawn a bunch of blobs for the trip back up.
+                        for (var lvl = 0; lvl < levels.length-1; lvl++) {
+                            for (var count = 2; count >= 0; count--) {
+                                var level = levels[lvl];
+                                var cell = level.free_cells.random();
+                                if (cell) {
+                                    var blob = level.blob(cell[0], cell[1]);
+                                    level.add(blob);
+                                    level.free_cells.splice(level.free_cells.indexOf(cell), 1);
+                                }
+                            }
+                        }
+                    }
                 }
                 return true;
             } else if (thing.portal) {
@@ -214,20 +236,16 @@ Thing.prototype = {
                 this.random_teleport();
             }
         }
-        return true;
+        return false;
     },
 
     magic: function() {
-        if (this.mp >= 3) {
-            if (this.mp >= 3) {
-                this.random_teleport();
-            }
-
-            if (this.mp >= 5 && this.maxhp < 16) {
+        if (this.mp >= 1) {
+            if (this.mp >= 2 && this.maxhp < 16) {
                 this.maxhp++;
             }
             
-            if (this.mp >= 7) { // Destroy everything adjacent.
+            if (this.mp >= 4) { // Destroy everything adjacent.
                 for (var i = this.x - 1; i <= this.x + 1; i++) {
                     for (var j = this.y - 1; j <= this.y + 1; j++) {
                         if (i >= 0 && i < W && j >= 0 && j < H) {
@@ -241,15 +259,33 @@ Thing.prototype = {
                     }
                 }
             }
+
+            if (this.mp >= 1 && this.mp < this.maxmp) { // Teleport after destroying everything and only if we're not dropping down.
+                this.random_teleport();
+            }
             
-            if (this.mp >= 9) { // Full heal.
+            if (this.mp >= 6) { // Full heal.
                 this.hp = this.maxhp;
             }
             
-            if (this.mp == this.maxmp && this.level.depth < numlevels-1) { // Drop down a level.
+            if (this.mp == this.maxmp && this.level.depth < numlevels-1) { // Drop down a level and destroy everything there too.
                 this.level.remove(this);
                 this.level = levels[this.level.depth+1];
                 this.level.add(this);
+
+                for (var i = this.x - 1; i <= this.x + 1; i++) {
+                    for (var j = this.y - 1; j <= this.y + 1; j++) {
+                        if (i >= 0 && i < W && j >= 0 && j < H) {
+                            for (var t = 0; t < this.level.map[i][j].length; t++) {
+                                var thing = this.level.map[i][j][t];
+                                if (thing.enemy || thing.wall) {
+                                    this.level.remove(thing);
+                                }
+                            }
+                        }
+                    }
+                }
+
             }
 
             this.mp = 0;
@@ -268,6 +304,7 @@ Thing.prototype = {
     },
 
     damage: function(by) {
+        this.hurt = true;
         this.hp--;
         if (this.hp == 0) {
             this.dead = true;
@@ -307,6 +344,15 @@ Thing.prototype = {
         }
         if (used) {
             this.inventory.splice(selected_idx, 1);
+        }
+
+        if (!this.inventory[selected_idx]) {
+            if (this.selected[0] > 0) {
+                this.selected[0]--;
+            } else if (this.selected[1] > 0) {
+                this.selected[0] = INVH-1;
+                this.selected[1]--;
+            }
         }
     },
 }
@@ -364,6 +410,14 @@ Level = function(depth) {
         this.add(this.stair_down);
     }
 
+    if (depth > numlevels/2) {
+        var cell = this.free_cells.random();
+        if (cell) {
+            this.add(this.blob(cell[0], cell[1]));
+            this.free_cells.splice(this.free_cells.indexOf(cell), 1);
+        }
+    }
+    
     for (var i = 0; i < depth+1; i++) { // Add some enemies
         var cell = this.free_cells.random();
         if (cell) {
@@ -398,11 +452,23 @@ Level.prototype = {
         return beast;
     },
 
+    blob: function(x, y) {
+        var blob = new Thing(x, y, blob_sprite);
+        blob.enemy = true;
+        blob.hp = blob.maxhp = 2;
+        var roll = ROT.RNG.getUniform();
+        if (roll < 0.8) {
+            blob.inventory.push(this.mp_pot());
+        }
+        return blob;
+    },
+
     badman: function(x, y) {
         var badman = new Thing(x, y, badman_sprite);
         badman.enemy = true;
         badman.inventory.push(this.treasure());
         badman.hp = 4;
+        badman.maxhp = 4;
         return badman;
      },
 
@@ -440,7 +506,6 @@ Level.prototype = {
         if (player.level == this) {
             this.fov.compute(player.x, player.y, 5, function(x, y, r, visibility) {
                 if (x >= 0 && y >= 0 && x < W && y < H) {
-                    //console.log(x, y);
                     this.map[x][y].lit = true;
                     this.map[x][y].seen = true;
                     for (var t in this.map[x][y]) {
@@ -455,7 +520,6 @@ Level.prototype = {
     },
 
     update: function() {
-        //console.log("Updating.");
         var pathfind = new ROT.Path.AStar(player.x, player.y, this.passable.bind(this), {topology: 4});
 
         // Reset moved state of all enemies and lit state of map.
@@ -480,7 +544,6 @@ Level.prototype = {
                         thing.moved = true;
                         if (thing.sees_player) {
                             var step = 0;
-                            //console.log("Pathing");
                             pathfind.compute(thing.x, thing.y, function(x, y) {
                                 if (step == 1) {
                                     thing.move(x-thing.x, y-thing.y);
@@ -567,7 +630,7 @@ function restart() {
     player.hp = 5;
     player.maxhp = 5;
     player.mp = 3;
-    player.maxmp = 15;
+    player.maxmp = 8;
     window.tick = 0;
 
     window.numlevels = 10;
@@ -595,10 +658,13 @@ function draw_pixel(idx, c) {
 }
 
 function draw_sprite(sprite, x, y, filter) {
+    if (!filter) {
+        filter = function(px) { return px; };
+    }
     for (var i = 0; i < 3; i++) {
         for (var j = 0; j < 3; j++) {
             var idx = ((x*3+i) + (y*3+j) * 16) * 4;
-            draw_pixel(idx, sprite[i+j*3]);
+            draw_pixel(idx, filter(sprite[i+j*3]));
         }
     }
 }
@@ -630,11 +696,17 @@ function draw_big_sprite(sprite) {
 }
 
 function draw_health() {
+    var idx = (15 + (player.maxhp) * 16) * 4;
+    draw_pixel(idx, 0);
+    
     for (var i = 0; i < player.hp; i++) {
         var idx = (15 + i * 16) * 4;
         draw_pixel(idx, _);
     }
 
+    var idx = (player.maxmp + (15 * 16)) * 4;
+    draw_pixel(idx, 0);
+    
     for (var i = 0; i < player.mp; i++) {
         var idx = (i + 15 * 16) * 4;
         draw_pixel(idx, m);
@@ -684,7 +756,20 @@ function render() {
                     for (var t = 0; t < player.level.map[i][j].length; t++) {
                         var thing = player.level.map[i][j][t];
                         if (player.level.map[i][j].lit || !thing.enemy) {
-                            draw_sprite(thing.sprite, i, j);
+                            var filter = undefined;
+                            if (thing.hurt) {
+                                filter = function(px) {
+                                    console.log("ow.");
+                                    if (px == $) {
+                                        return px;
+                                    } else if (px.length) {
+                                        return [px[0]+2, px[1], px[2]];
+                                    } else {
+                                        return [6, px, px];
+                                    }
+                                }
+                            }
+                            draw_sprite(thing.sprite, i, j, filter);
                         }
                     }
                 } else {
@@ -750,21 +835,34 @@ $(window).keydown(function(evt) {
         if (!player.in_inventory) {
             moved = player.magic();
         }
+    } else if (evt.keyCode == 78) { // N
+        if (!player.in_inventory) {
+            moved = true;
+        }
     } else if (evt.keyCode == 73) { // I
+        console.log("inv");
         player.in_inventory = !player.in_inventory;
     } else {
         //console.log(evt.keyCode);
     }
      
     if (moved) {
+        player.hurt = false;
         tick++;
-        //for (var i = 0; i < levels.length; i++) {
-        //    levels[i].update();
-        //}
-        player.level.update();
+        for (var i = 0; i < levels.length; i++) {
+            levels[i].update();
+        }
     }
-    //console.log("Rendering");
     render();
+
+    for (var i = 0; i < player.level.map.length; i++) {
+        for (var j = 0; j < player.level.map.length; j++) {
+            for (var t = 0; t < player.level.map[i][j].length; t++) {
+                var thing = player.level.map[i][j][t];
+                if (thing.hurt) thing.hurt = false;
+            }
+        }
+    }
 });
 
 $(function() {
