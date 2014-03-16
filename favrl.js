@@ -338,11 +338,15 @@ Thing.prototype = {
 
         var used = false;
         if (thing.hp_pot) {
-            if (this.hp < this.maxhp) this.hp++;
-            used = true;
+            if (this.hp < this.maxhp) {
+                this.hp++;
+                used = true;
+            }
         } else if (thing.mp_pot) {
-            if (this.mp < this.maxmp) this.mp++;
-            used = true;
+            if (this.mp < this.maxmp) {
+                this.mp++;
+                used = true;
+            }
         }
         if (used) {
             this.inventory.splice(selected_idx, 1);
