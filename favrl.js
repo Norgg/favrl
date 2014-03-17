@@ -410,5 +410,9 @@ $(function() {
         evt.preventDefault();
         $('#hintsul').toggle(50);
     });
+    $('#thx').click(function(evt) {
+        evt.preventDefault();
+        $('#thxspan').toggle(50);
+    });
     setup();
 });

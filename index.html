@@ -12,7 +12,7 @@
         body { font-family: sans-serif; background: black; margin: 0px; padding: 0px; }
         a { text-decoration: none; color: #999; }
         #wrap { width: 400px; margin: 0px auto; padding: 5px; background: #222; color: white;}
-        #hintsul { display: none; }
+        .hidden { display: none; }
     </style>
 </head>
 <body>
@@ -28,13 +28,18 @@
             N to wait.<br/>
             R to restart.
         </p>
-        <p id="toosmallp">&gt; <a href="" id="toosmall">But it's too small/laggy! D:</a></p>
+        <p id="toosmallp">&gt; <a href="" id="toosmall">But it's too small/laggy/broken! D:</a></p>
         <p>&gt; <a href="" id="hints">Gimme hints!</a>
-            <ul id="hintsul">
+            <ul class="hidden" id="hintsul">
                 <li>You'll need to use magic to win.</li>
                 <li>The more magic you use at once, the more things it will do.</li>
                 <li>There are 10 levels.</li>
             </ul>
+        </p>
+        <p>&gt; <a href="" id="thx">Who made this?</a>
+            <span class="hidden" id="thxspan">
+                Hi! I'm Norgg, I've made a few other games up at <a href="http://norgg.org/">norgg.org</a>.  This was a 7DRL jam game, inspired by <a href="http://www.p01.org/releases/DEFENDER_of_the_favicon/">DEFENDER of the favicon</a> and using ondras's lovely <a href="http://ondras.github.io/rot.js/hp/">rot.js</a>
+            </span>
         </p>
     </div>
 </body>
